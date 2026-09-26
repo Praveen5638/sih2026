@@ -47,18 +47,32 @@ object GeminiAiHelper {
         )
     }
 
-    suspend fun calculateDynamicPricing(matCost: Double, labCost: Double, othCost: Double): PricingResult = withContext(Dispatchers.IO) {
-        val costFloor = matCost + labCost + othCost
-        val recMin = costFloor * 1.25
-        val recPrice = costFloor * 1.40
-        val recMax = costFloor * 1.60
-
+    suspend fun calculateDynamicPricing(
+        matCost: Double,
+        labCost: Double,
+        othCost: Double,
+        productName: String = "Artisan Product",
+        category: String = "Handicraft",
+        craft: String = "Handloom",
+        material: String = "Natural",
+        technique: String = "Handmade"
+    ): PricingResult = withContext(Dispatchers.IO) {
+        val rec = DynamicPricingEngine.calculatePriceRecommendation(
+            productName = productName,
+            category = category,
+            craft = craft,
+            material = material,
+            technique = technique,
+            matCost = matCost,
+            labCost = labCost,
+            othCost = othCost
+        )
         PricingResult(
-            costFloor = costFloor,
-            recommendedMin = recMin,
-            recommendedPrice = recPrice,
-            recommendedMax = recMax,
-            reasoning = "Calculated based on raw material cost (₹$matCost), artisan labour effort (₹$labCost), packaging & transport (₹$othCost), plus 40% fair profit margin matching similar marketplace comparables."
+            costFloor = rec.costFloor,
+            recommendedMin = rec.suggestedMin,
+            recommendedPrice = rec.recommendedPrice,
+            recommendedMax = rec.suggestedMax,
+            reasoning = rec.explanationText
         )
     }
 }

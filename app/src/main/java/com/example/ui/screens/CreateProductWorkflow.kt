@@ -722,11 +722,21 @@ fun AiReviewScreen(viewModel: ArtisanViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PricingAssistantScreen(viewModel: ArtisanViewModel) {
+    val context = LocalContext.current
     var matCost by remember { mutableStateOf(viewModel.materialCostInput) }
     var labCost by remember { mutableStateOf(viewModel.labourCostInput) }
     var othCost by remember { mutableStateOf(viewModel.otherCostInput) }
     var sellPrice by remember { mutableStateOf(viewModel.sellingPriceInput) }
-    var profitMargin by remember { mutableStateOf(40f) } // Interactive margin slider
+    var profitMargin by remember { mutableStateOf(viewModel.targetProfitMarginInput.toFloat()) }
+
+    // Auto-calculate recommendation on initial load if null
+    LaunchedEffect(Unit) {
+        if (viewModel.pricingRecommendationResult == null) {
+            viewModel.calculatePricing()
+        }
+    }
+
+    val rec = viewModel.pricingRecommendationResult
 
     Scaffold(
         topBar = {
@@ -735,6 +745,11 @@ fun PricingAssistantScreen(viewModel: ArtisanViewModel) {
                 navigationIcon = {
                     IconButton(onClick = { viewModel.currentScreen = AppScreen.AI_REVIEW }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.speakPricingSummary(context) }) {
+                        Icon(Icons.Default.VolumeUp, contentDescription = "Listen Price Summary", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
@@ -750,21 +765,29 @@ fun PricingAssistantScreen(viewModel: ArtisanViewModel) {
             item {
                 LinearProgressIndicator(progress = { 0.90f }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "Step 4: Cost & Fair Price Recommendation", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(text = "Step 4: Fair Pricing Engine (Cost Floor + Robust Market Data)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(text = "Protects artisan labour. Never underprices your work.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
+            // COST INPUT BREAKDOWN FIELDS
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(
                         value = matCost,
-                        onValueChange = { matCost = it },
+                        onValueChange = {
+                            matCost = it
+                            viewModel.materialCostInput = it
+                        },
                         label = { Text("Material Cost (₹)") },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     )
                     OutlinedTextField(
                         value = labCost,
-                        onValueChange = { labCost = it },
+                        onValueChange = {
+                            labCost = it
+                            viewModel.labourCostInput = it
+                        },
                         label = { Text("Labour Cost (₹)") },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
@@ -775,13 +798,17 @@ fun PricingAssistantScreen(viewModel: ArtisanViewModel) {
             item {
                 OutlinedTextField(
                     value = othCost,
-                    onValueChange = { othCost = it },
-                    label = { Text("Transport / Packaging (₹)") },
+                    onValueChange = {
+                        othCost = it
+                        viewModel.otherCostInput = it
+                    },
+                    label = { Text("Transport & Packaging (₹)") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
             }
 
+            // TARGET PROFIT MARGIN SLIDER
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -789,37 +816,45 @@ fun PricingAssistantScreen(viewModel: ArtisanViewModel) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = "Target Profit Margin: ${profitMargin.toInt()}%", fontWeight = FontWeight.Bold)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Target Fair Profit Margin", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(text = "${profitMargin.toInt()}%", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 15.sp)
+                        }
                         Slider(
                             value = profitMargin,
                             onValueChange = {
                                 profitMargin = it
-                                val mat = matCost.toDoubleOrNull() ?: 800.0
-                                val lab = labCost.toDoubleOrNull() ?: 400.0
-                                val oth = othCost.toDoubleOrNull() ?: 120.0
-                                val floor = mat + lab + oth
-                                val calculated = floor * (1 + (it / 100.0))
-                                sellPrice = calculated.toInt().toString()
+                                viewModel.targetProfitMarginInput = it.toDouble()
+                                viewModel.calculatePricing()
+                                if (rec != null) {
+                                    sellPrice = rec.recommendedPrice.toInt().toString()
+                                }
                             },
-                            valueRange = 20f..70f,
-                            steps = 10
+                            valueRange = 15f..60f,
+                            steps = 9
                         )
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("20% (Fair)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("40% (Standard)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("70% (Premium)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("15% (Essential)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("30% (Fair Artisan)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("60% (Premium Brocade)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
 
+            // RECALCULATE BUTTON
             item {
                 Button(
                     onClick = {
                         viewModel.materialCostInput = matCost
                         viewModel.labourCostInput = labCost
                         viewModel.otherCostInput = othCost
-                        viewModel.calculatePricing {}
+                        viewModel.targetProfitMarginInput = profitMargin.toDouble()
+                        viewModel.calculatePricing {
+                            viewModel.pricingRecommendationResult?.let {
+                                sellPrice = it.recommendedPrice.toInt().toString()
+                            }
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -829,34 +864,129 @@ fun PricingAssistantScreen(viewModel: ArtisanViewModel) {
                 ) {
                     Icon(Icons.Default.Calculate, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Recalculate AI Fair Price")
+                    Text("Calculate Fair Price Engine")
                 }
             }
 
-            if (viewModel.pricingResult != null) {
+            // EXPLAINABLE PRICING RESULT CARD
+            if (rec != null) {
                 item {
-                    val res = viewModel.pricingResult!!
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)),
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(text = "Estimated Cost Floor: ₹${res.costFloor.toInt()}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = "Suggested Range: ₹${res.recommendedMin.toInt()} – ₹${res.recommendedMax.toInt()}", fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = "Recommended Price: ₹${res.recommendedPrice.toInt()}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "💡 Pricing Engine Recommendation", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = when (rec.marketConfidence) {
+                                        com.example.ai.MarketConfidence.HIGH -> Color(0xFF10B981)
+                                        com.example.ai.MarketConfidence.MEDIUM -> Color(0xFF3B82F6)
+                                        else -> Color(0xFFF59E0B)
+                                    }
+                                ) {
+                                    Text(
+                                        text = "${rec.marketConfidence} DATA CONFIDENCE",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(text = "• Production Cost Floor: ₹${rec.costFloor.toInt()} (Labour: ₹${labCost})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(text = "• Observed Market Range (P25–P75): ₹${rec.marketP25.toInt()} – ₹${rec.marketP75.toInt()}", fontSize = 13.sp)
+                            Text(text = "• Suggested Fair Range: ₹${rec.suggestedMin.toInt()} – ₹${rec.suggestedMax.toInt()}", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = "Recommended Price: ₹${rec.recommendedPrice.toInt()}", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Button(
+                                    onClick = { viewModel.speakPricingSummary(context) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("🔊 Suniye (Audio Explanation)", fontSize = 11.sp)
+                                }
+                            }
                         }
                     }
                 }
             }
 
+            // CONFLICT OR WARNING BANNERS
+            if (rec != null && rec.conflictStatus == com.example.ai.PricingConflictStatus.COST_MARKET_CONFLICT) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(text = "⚠️ Cost-Market Conflict Detected!", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(text = rec.warningText ?: "", fontSize = 12.sp, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = { sellPrice = rec.costFloor.toInt().toString() },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Keep Cost Floor (₹${rec.costFloor.toInt()})", fontSize = 10.sp)
+                                }
+                                Button(
+                                    onClick = { sellPrice = (rec.costFloor * 1.15).toInt().toString() },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Position Premium", fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            val enteredPriceVal = sellPrice.toDoubleOrNull() ?: 0.0
+            if (rec != null && enteredPriceVal > 0 && enteredPriceVal < rec.costFloor) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEE2E2))
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFDC2626))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(text = "Below Cost Warning 🛑", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF991B1B))
+                                Text(
+                                    text = "Your entered price ₹${enteredPriceVal.toInt()} is below production cost ₹${rec.costFloor.toInt()}! Per unit loss: ₹${(rec.costFloor - enteredPriceVal).toInt()}.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF7F1D1D)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // FINAL SELLING PRICE INPUT FIELD
             item {
                 OutlinedTextField(
                     value = sellPrice,
-                    onValueChange = { sellPrice = it },
-                    label = { Text("Your Final Selling Price (₹)") },
+                    onValueChange = {
+                        sellPrice = it
+                        viewModel.sellingPriceInput = it
+                    },
+                    label = { Text("Your Selected Selling Price (₹)") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("selling_price_input"),

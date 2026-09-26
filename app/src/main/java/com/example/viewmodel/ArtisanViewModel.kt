@@ -118,6 +118,8 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
     var sellingPriceInput by mutableStateOf("1750")
 
     var pricingResult by mutableStateOf<PricingResult?>(null)
+    var pricingRecommendationResult by mutableStateOf<com.example.ai.PricingRecommendationResult?>(null)
+    var targetProfitMarginInput by mutableStateOf(30.0)
     var selectedProductIdForDetail by mutableStateOf<Long?>(null)
     var isAiProcessing by mutableStateOf(false)
 
@@ -140,7 +142,9 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
         labourCostInput = "400"
         otherCostInput = "120"
         sellingPriceInput = "1750"
+        targetProfitMarginInput = 30.0
         pricingResult = null
+        pricingRecommendationResult = null
     }
 
     var studioStageLogs by mutableStateOf<List<com.example.ai.ProcessingStageLog>>(emptyList())
@@ -329,19 +333,54 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
         processConversationalSpeech(getApplication(), transcript, onComplete)
     }
 
-    fun calculatePricing(onComplete: () -> Unit) {
+    fun calculatePricing(onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             isAiProcessing = true
             val mat = materialCostInput.toDoubleOrNull() ?: 800.0
             val lab = labourCostInput.toDoubleOrNull() ?: 400.0
             val oth = otherCostInput.toDoubleOrNull() ?: 120.0
-            val res = GeminiAiHelper.calculateDynamicPricing(mat, lab, oth)
-            pricingResult = res
-            if (sellingPriceInput.isBlank() || sellingPriceInput.toDoubleOrNull() == 1750.0) {
-                sellingPriceInput = res.recommendedPrice.toInt().toString()
+            val targetMargin = targetProfitMarginInput
+            val currentSellingPrice = sellingPriceInput.toDoubleOrNull()
+
+            val rec = com.example.ai.DynamicPricingEngine.calculatePriceRecommendation(
+                productName = productName.ifBlank { "Artisan Craft" },
+                category = category.ifBlank { "Handicraft" },
+                craft = craft.ifBlank { artisanCraft },
+                material = material.ifBlank { "Handloom / Handicraft" },
+                technique = technique.ifBlank { "Handmade" },
+                matCost = mat,
+                labCost = lab,
+                othCost = oth,
+                targetMargin = targetMargin,
+                userSelectedPrice = currentSellingPrice
+            )
+
+            pricingRecommendationResult = rec
+            pricingResult = PricingResult(
+                costFloor = rec.costFloor,
+                recommendedMin = rec.suggestedMin,
+                recommendedPrice = rec.recommendedPrice,
+                recommendedMax = rec.suggestedMax,
+                reasoning = rec.explanationText
+            )
+
+            if (sellingPriceInput.isBlank() || sellingPriceInput == "1750") {
+                sellingPriceInput = rec.recommendedPrice.toInt().toString()
             }
             isAiProcessing = false
             onComplete()
+        }
+    }
+
+    fun speakPricingSummary(context: android.content.Context) {
+        com.example.ai.VoiceAssistEngine.initializeTts(context) {
+            val rec = pricingRecommendationResult
+            val text = if (rec != null) {
+                "Suniye: Aapka production cost floor ₹${rec.costFloor.toInt()} hai, jisme labour cost ₹${labourCostInput} fully protected hai. Market median ₹${rec.marketMedian.toInt()} hai. Suggested fair price ₹${rec.recommendedPrice.toInt()} hai."
+            } else {
+                "Aapka target price ₹$sellingPriceInput set kiya gaya hai."
+            }
+            com.example.ai.VoiceAssistEngine.speakReadBack(text)
         }
     }
 
@@ -350,9 +389,10 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
             val mat = materialCostInput.toDoubleOrNull() ?: 800.0
             val lab = labourCostInput.toDoubleOrNull() ?: 400.0
             val oth = otherCostInput.toDoubleOrNull() ?: 120.0
-            val floor = pricingResult?.costFloor ?: (mat + lab + oth)
-            val rec = pricingResult?.recommendedPrice ?: (floor * 1.4)
-            val sell = sellingPriceInput.toDoubleOrNull() ?: rec
+            val rec = pricingRecommendationResult
+            val floor = rec?.costFloor ?: (mat + lab + oth)
+            val recPrice = rec?.recommendedPrice ?: (floor * 1.4)
+            val sell = sellingPriceInput.toDoubleOrNull() ?: recPrice
 
             val entity = ProductEntity(
                 productName = productName.ifBlank { "Handcrafted $artisanCraft" },
@@ -372,8 +412,13 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
                 labourCost = lab,
                 otherCost = oth,
                 costFloor = floor,
-                recommendedPrice = rec,
+                recommendedPrice = recPrice,
                 sellingPrice = sell,
+                marketP25 = rec?.marketP25 ?: (floor * 1.25),
+                marketMedian = rec?.marketMedian ?: (floor * 1.35),
+                marketP75 = rec?.marketP75 ?: (floor * 1.50),
+                marketConfidence = rec?.marketConfidence?.name ?: "MEDIUM",
+                pricingEngineVersion = rec?.pricingEngineVersion ?: "v1-hardened",
                 status = status
             )
             repository.insertProduct(entity)

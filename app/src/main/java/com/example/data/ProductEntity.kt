@@ -25,6 +25,11 @@ data class ProductEntity(
     val costFloor: Double,
     val recommendedPrice: Double,
     val sellingPrice: Double,
+    val marketP25: Double = 0.0,
+    val marketMedian: Double = 0.0,
+    val marketP75: Double = 0.0,
+    val marketConfidence: String = "MEDIUM",
+    val pricingEngineVersion: String = "v1-hardened",
     val status: String, // "Draft", "Ready", "Published"
     val createdAt: Long = System.currentTimeMillis()
 )
