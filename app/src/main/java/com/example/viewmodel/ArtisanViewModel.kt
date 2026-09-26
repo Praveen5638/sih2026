@@ -145,24 +145,51 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
 
     var studioStageLogs by mutableStateOf<List<com.example.ai.ProcessingStageLog>>(emptyList())
     var studioMetrics by mutableStateOf<com.example.ai.StudioPipelineMetrics?>(null)
+    var imageContractResult by mutableStateOf<com.example.ai.ImageProcessingContractResult?>(null)
     var benchmarkResults by mutableStateOf<List<com.example.ai.BenchmarkItemResult>>(emptyList())
+    var userSelectedPhotoChoice by mutableStateOf("ENHANCED") // "ENHANCED" or "ORIGINAL"
 
     fun enhanceImage(imageUri: String) {
         originalImageUri = imageUri
         enhancedImageUri = imageUri
     }
 
-    fun processCameraImage(context: android.content.Context, inputBitmap: android.graphics.Bitmap, onComplete: () -> Unit) {
+    fun processCameraUriInput(context: android.content.Context, inputUri: android.net.Uri, onComplete: () -> Unit) {
         viewModelScope.launch {
             isAiProcessing = true
-            val result = com.example.ai.ProductImageProcessor.runStudioPipeline(context, inputBitmap)
-            enhancedImageUri = result.outputUri.toString()
-            originalImageUri = result.outputUri.toString()
-            studioStageLogs = result.metrics.stageLogs
-            studioMetrics = result.metrics
+            val result = com.example.ai.ProductImageProcessor.processUriInput(context, inputUri)
+            imageContractResult = result
+            originalImageUri = result.originalUri
+            enhancedImageUri = result.enhancedUri ?: result.originalUri
+            studioStageLogs = result.stageLogs
+            userSelectedPhotoChoice = "ENHANCED"
             isAiProcessing = false
             onComplete()
         }
+    }
+
+    fun processCameraBitmapInput(context: android.content.Context, inputBitmap: android.graphics.Bitmap, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            isAiProcessing = true
+            val result = com.example.ai.ProductImageProcessor.processBitmapInput(context, inputBitmap)
+            imageContractResult = result
+            originalImageUri = result.originalUri
+            enhancedImageUri = result.enhancedUri ?: result.originalUri
+            studioStageLogs = result.stageLogs
+            userSelectedPhotoChoice = "ENHANCED"
+            isAiProcessing = false
+            onComplete()
+        }
+    }
+
+    fun userSelectEnhancedPhoto() {
+        userSelectedPhotoChoice = "ENHANCED"
+        enhancedImageUri = imageContractResult?.enhancedUri ?: originalImageUri
+    }
+
+    fun userSelectOriginalPhoto() {
+        userSelectedPhotoChoice = "ORIGINAL"
+        enhancedImageUri = originalImageUri
     }
 
     fun runStudioBenchmark() {

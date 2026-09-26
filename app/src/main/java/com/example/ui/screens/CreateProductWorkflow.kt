@@ -46,15 +46,7 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && cameraTempUri != null) {
-            try {
-                val inputStream = context.contentResolver.openInputStream(cameraTempUri!!)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                if (bitmap != null) {
-                    viewModel.processCameraImage(context, bitmap) {}
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            viewModel.processCameraUriInput(context, cameraTempUri!!) {}
         }
     }
 
@@ -63,15 +55,7 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                if (bitmap != null) {
-                    viewModel.processCameraImage(context, bitmap) {}
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            viewModel.processCameraUriInput(context, uri) {}
         }
     }
 
@@ -99,6 +83,29 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                 LinearProgressIndicator(progress = { 0.25f }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = "Step 1: Full-Resolution Capture & Objective CV Audit", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+
+            // USER TRUST MESSAGE BANNER
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(text = "Product Authenticity Guaranteed 🛡️", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(text = "Your product stays the same real craft. We improve the photograph.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
             }
 
             // Real Camera / Gallery Action Bar
@@ -145,26 +152,26 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                 }
             }
 
-            // Live Empirical Metrics Card
-            val metrics = viewModel.studioMetrics
-            if (metrics != null) {
+            // Single Contract Result & Metrics Audit Card
+            val contractResult = viewModel.imageContractResult
+            if (contractResult != null) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (metrics.fallbackTriggered) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            containerColor = if (contractResult.fallbackTriggered) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                         )
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = "📊 Empirical Pipeline Metrics", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(text = "📊 Processing Contract Verification", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = if (metrics.fallbackTriggered) MaterialTheme.colorScheme.error else Color(0xFF10B981)
+                                    color = if (contractResult.fallbackTriggered) MaterialTheme.colorScheme.error else Color(0xFF10B981)
                                 ) {
                                     Text(
-                                        text = if (metrics.fallbackTriggered) "FALLBACK MODE ACTIVE" else "STUDIO PIPELINE PASSED",
+                                        text = if (contractResult.fallbackTriggered) "CONSERVATIVE FALLBACK" else "STUDIO PIPELINE PASSED",
                                         color = Color.White,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
@@ -173,11 +180,24 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = "• Execution Time: ${metrics.executionTimeMs} ms", fontSize = 12.sp)
-                            Text(text = "• Source Resolution: ${metrics.inputWidth} x ${metrics.inputHeight} px", fontSize = 12.sp)
-                            Text(text = "• Foreground Area Ratio: ${(metrics.maskAreaRatio * 100).toInt()}%", fontSize = 12.sp)
-                            Text(text = "• Silhouette Jaccard Index: ${(metrics.jaccardSilhouetteIndex * 100).toInt()}%", fontSize = 12.sp)
-                            Text(
+                            Text(text = "• Execution Time: ${contractResult.processingTimeMs} ms", fontSize = 12.sp)
+                            Text(text = "• Canvas Dimensions: ${contractResult.width} x ${contractResult.height} px (${contractResult.outputFormat})", fontSize = 12.sp)
+                            Text(text = "• Encoded File Size: ${(contractResult.outputSizeBytes / 1024)} KB", fontSize = 12.sp)
+                            Text(text = "• Protected Mean ΔE_ab: ${String.format("%.2f", contractResult.meanDeltaE)} (95th %: ${String.format("%.2f", contractResult.p95DeltaE)})", fontSize = 12.sp)
+                            Text(text = "• Silhouette Jaccard Index: ${(contractResult.jaccardSilhouetteIndex * 100).toInt()}%", fontSize = 12.sp)
+                            if (contractResult.fallbackTriggered) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "ℹ️ Photo safely retained with original background (limited enhancement). Reason: ${contractResult.fallbackReason}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
                                 text = "• Protected Region ΔE_ab Color Drift: ${String.format("%.2f", metrics.protectedColorDriftDeltaE)} (Limit ≤ 5.0)",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
@@ -220,7 +240,25 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                 }
             }
 
-            // Sample Selector or Run Pipeline Button
+            // Before / After Choice Controls
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = viewModel.userSelectedPhotoChoice == "ENHANCED",
+                        onClick = { viewModel.userSelectEnhancedPhoto() },
+                        label = { Text("Enhanced ✨", fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = viewModel.userSelectedPhotoChoice == "ORIGINAL",
+                        onClick = { viewModel.userSelectOriginalPhoto() },
+                        label = { Text("Original 📷", fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(text = "Or Select Sample Craft to Test Pipeline:", fontSize = 13.sp, fontWeight = FontWeight.Medium)
@@ -235,7 +273,7 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                                 onClick = {
                                     selectedSample = item
                                     val dummyBitmap = Bitmap.createBitmap(800, 800, Bitmap.Config.ARGB_8888)
-                                    viewModel.processCameraImage(context, dummyBitmap) {}
+                                    viewModel.processCameraBitmapInput(context, dummyBitmap) {}
                                 },
                                 label = { Text(item, fontSize = 11.sp) }
                             )
