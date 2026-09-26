@@ -1,0 +1,6 @@
+{
+  "name": "Artisan AI Market Linkage",
+  "description": "AI-driven market linkage and smart cataloging mobile app for marginalized artisans (SIH PS-26090)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
