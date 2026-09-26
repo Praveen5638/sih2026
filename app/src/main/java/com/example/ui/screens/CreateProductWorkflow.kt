@@ -827,7 +827,27 @@ fun FinalPreviewScreen(viewModel: ArtisanViewModel) {
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
-                        Text(text = viewModel.productName.ifBlank { "Handcrafted Artisan Product" }, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = viewModel.productName.ifBlank { "Handcrafted Artisan Product" }, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = if (viewModel.userSelectedPhotoChoice == "ENHANCED") "Photo: Enhanced ✨" else "Photo: Original 📷",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(text = "Attached Image: ${viewModel.enhancedImageUri.ifBlank { viewModel.originalImageUri.ifBlank { "No image" } }}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(text = "Category: ${viewModel.category} • Craft: ${viewModel.craft}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(modifier = Modifier.height(8.dp))
