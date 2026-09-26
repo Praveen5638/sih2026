@@ -143,9 +143,27 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
         pricingResult = null
     }
 
+    var studioStageLogs by mutableStateOf<List<com.example.ai.ProcessingStageLog>>(emptyList())
+    var maskQualityScore by mutableStateOf(0f)
+    var fidelityScore by mutableStateOf(0f)
+
     fun enhanceImage(imageUri: String) {
         originalImageUri = imageUri
         enhancedImageUri = imageUri
+    }
+
+    fun processCameraImage(context: android.content.Context, inputBitmap: android.graphics.Bitmap, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            isAiProcessing = true
+            val result = com.example.ai.ProductImageProcessor.runStudioPipeline(context, inputBitmap)
+            enhancedImageUri = result.outputUri.toString()
+            originalImageUri = result.outputUri.toString()
+            studioStageLogs = result.stageLogs
+            maskQualityScore = result.maskQualityScore
+            fidelityScore = result.fidelityScore
+            isAiProcessing = false
+            onComplete()
+        }
     }
 
     fun processVoiceTranscript(transcript: String, onComplete: () -> Unit) {

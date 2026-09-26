@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,24 +16,54 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import com.example.viewmodel.AppScreen
 import com.example.viewmodel.ArtisanViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImageStudioScreen(viewModel: ArtisanViewModel) {
+    val context = LocalContext.current
     var selectedSample by remember { mutableStateOf("Banarasi Saree") }
     val samples = listOf("Banarasi Saree", "Clay Diya", "Brass Idol", "Terracotta Vase", "Bamboo Basket")
+
+    // Real Camera Launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { capturedBitmap ->
+        if (capturedBitmap != null) {
+            viewModel.processCameraImage(context, capturedBitmap) {}
+        }
+    }
+
+    // Real Gallery Launcher
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                if (bitmap != null) {
+                    viewModel.processCameraImage(context, bitmap) {}
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI Image Studio / फोटो स्टूडियो") },
+                title = { Text("AI Studio & CV Pipeline / फोटो स्टूडियो") },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.currentScreen = AppScreen.HOME }) {
                         Icon(Icons.Default.Close, contentDescription = "Close")
@@ -39,86 +72,183 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LinearProgressIndicator(progress = { 0.25f }, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Step 1: Capture or Select Product Photo", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(16.dp))
+            item {
+                LinearProgressIndicator(progress = { 0.25f }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = "Step 1: Real Camera Capture & Studio CV Processing", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
 
-            // Before / After Preview Box
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(240.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+            // Real Camera / Gallery Action Bar
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = "AI Enhanced: $selectedSample", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(text = "Background Removed • Lighting Corrected • Crisp Edges", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(
+                        onClick = { cameraLauncher.launch() },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Real Camera", fontSize = 13.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = { galleryLauncher.launch("image/*") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Collections, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Gallery Upload", fontSize = 13.sp)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(text = "Choose Sample Artisan Item or Upload:", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                samples.take(3).forEach { item ->
-                    FilterChip(
-                        selected = selectedSample == item,
-                        onClick = { selectedSample = item },
-                        label = { Text(item, fontSize = 12.sp) }
-                    )
+            // Before / After Preview Box
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+                            Icon(Icons.Default.AutoFixHigh, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(text = if (viewModel.enhancedImageUri.isNotBlank()) "Studio Quality Output Ready ✨" else "AI Studio Protected Product: $selectedSample", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(
+                                text = "Background Replaced • Exposure/WB Tuned • Auto Cropped & Centered",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { /* Simulated Retake */ },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Retake")
+            // Sample Selector or Run Pipeline Button
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(text = "Or Select Sample Craft to Test Pipeline:", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        samples.take(3).forEach { item ->
+                            FilterChip(
+                                selected = selectedSample == item,
+                                onClick = {
+                                    selectedSample = item
+                                    val dummyBitmap = Bitmap.createBitmap(800, 800, Bitmap.Config.ARGB_8888)
+                                    viewModel.processCameraImage(context, dummyBitmap) {}
+                                },
+                                label = { Text(item, fontSize = 11.sp) }
+                            )
+                        }
+                    }
                 }
+            }
 
+            // CV Pipeline Steps Breakdown Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text(text = "⚙️ Studio Pipeline Architecture", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+                                Text(
+                                    text = if (viewModel.fidelityScore > 0f) "Fidelity: ${(viewModel.fidelityScore * 100).toInt()}%" else "Ready",
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        val stages = if (viewModel.studioStageLogs.isNotEmpty()) {
+                            viewModel.studioStageLogs
+                        } else {
+                            listOf(
+                                com.example.ai.ProcessingStageLog("REAL CAMERA", "Capture raw frame from device camera"),
+                                com.example.ai.ProcessingStageLog("SUBJECT SEGMENTATION", "Isolate product using saliency detection"),
+                                com.example.ai.ProcessingStageLog("MASK QUALITY CHECK", "Verify contour area & connectivity"),
+                                com.example.ai.ProcessingStageLog("MASK REFINEMENT", "Apply edge blur & anti-aliasing"),
+                                com.example.ai.ProcessingStageLog("PRODUCT PROTECTED", "Separate subject from background"),
+                                com.example.ai.ProcessingStageLog("BACKGROUND → REPLACE", "Composite onto neutral studio studio background"),
+                                com.example.ai.ProcessingStageLog("CV ENHANCEMENT", "Auto exposure, white balance & sharpen"),
+                                com.example.ai.ProcessingStageLog("RESIZE + CROP + CENTER", "Autocrop 10% safety margin, center in 1:1"),
+                                com.example.ai.ProcessingStageLog("FIDELITY VALIDATION", "Validate zero color distortion"),
+                                com.example.ai.ProcessingStageLog("FINAL IMAGE", "Studio-ready high-res PNG generated")
+                            )
+                        }
+
+                        stages.forEachIndexed { idx, stage ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = if (viewModel.studioStageLogs.isNotEmpty()) Color(0xFF10B981) else MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(text = "${idx + 1}. ${stage.stageName}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = stage.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
                 Button(
                     onClick = {
-                        viewModel.enhanceImage(selectedSample)
+                        if (viewModel.enhancedImageUri.isBlank()) {
+                            viewModel.enhanceImage(selectedSample)
+                        }
                         viewModel.currentScreen = AppScreen.VOICE_CATALOGER
                     },
                     modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
+                        .fillMaxWidth()
+                        .height(56.dp)
                         .testTag("use_photo_button"),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text("Use Photo →")
+                    Text("Proceed to Voice Cataloger →", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
