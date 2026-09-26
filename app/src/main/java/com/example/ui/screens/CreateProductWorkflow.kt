@@ -1,13 +1,14 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -24,8 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.example.viewmodel.AppScreen
 import com.example.viewmodel.ArtisanViewModel
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,18 +38,29 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
     var selectedSample by remember { mutableStateOf("Banarasi Saree") }
     val samples = listOf("Banarasi Saree", "Clay Diya", "Brass Idol", "Terracotta Vase", "Bamboo Basket")
 
-    // Real Camera Launcher
+    // Full-resolution temp image file for TakePicture() contract
+    var cameraTempUri by remember { mutableStateOf<Uri?>(null) }
+
+    // 1. FULL-RESOLUTION CAMERA LAUNCHER (ActivityResultContracts.TakePicture)
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { capturedBitmap ->
-        if (capturedBitmap != null) {
-            viewModel.processCameraImage(context, capturedBitmap) {}
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && cameraTempUri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(cameraTempUri!!)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                if (bitmap != null) {
+                    viewModel.processCameraImage(context, bitmap) {}
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
-    // Real Gallery Launcher
+    // 2. MODERN PHOTO PICKER (ActivityResultContracts.PickVisualMedia)
     val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
             try {
@@ -63,7 +78,7 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI Studio & CV Pipeline / फोटो स्टूडियो") },
+                title = { Text("Product Studio CV Audit / फोटो स्टूडियो") },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.currentScreen = AppScreen.HOME }) {
                         Icon(Icons.Default.Close, contentDescription = "Close")
@@ -83,7 +98,7 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
             item {
                 LinearProgressIndicator(progress = { 0.25f }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "Step 1: Real Camera Capture & Studio CV Processing", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(text = "Step 1: Full-Resolution Capture & Objective CV Audit", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
 
             // Real Camera / Gallery Action Bar
@@ -93,7 +108,16 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Button(
-                        onClick = { cameraLauncher.launch() },
+                        onClick = {
+                            try {
+                                val tempFile = File(context.cacheDir, "full_res_camera_${System.currentTimeMillis()}.jpg")
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", tempFile)
+                                cameraTempUri = uri
+                                cameraLauncher.launch(uri)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .height(50.dp),
@@ -102,11 +126,13 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                     ) {
                         Icon(Icons.Default.PhotoCamera, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Real Camera", fontSize = 13.sp)
+                        Text("Full-Res Camera", fontSize = 13.sp)
                     }
 
                     OutlinedButton(
-                        onClick = { galleryLauncher.launch("image/*") },
+                        onClick = {
+                            galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .height(50.dp),
@@ -114,7 +140,54 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                     ) {
                         Icon(Icons.Default.Collections, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Gallery Upload", fontSize = 13.sp)
+                        Text("Photo Picker", fontSize = 13.sp)
+                    }
+                }
+            }
+
+            // Live Empirical Metrics Card
+            val metrics = viewModel.studioMetrics
+            if (metrics != null) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (metrics.fallbackTriggered) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "📊 Empirical Pipeline Metrics", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (metrics.fallbackTriggered) MaterialTheme.colorScheme.error else Color(0xFF10B981)
+                                ) {
+                                    Text(
+                                        text = if (metrics.fallbackTriggered) "FALLBACK MODE ACTIVE" else "STUDIO PIPELINE PASSED",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(text = "• Execution Time: ${metrics.executionTimeMs} ms", fontSize = 12.sp)
+                            Text(text = "• Source Resolution: ${metrics.inputWidth} x ${metrics.inputHeight} px", fontSize = 12.sp)
+                            Text(text = "• Foreground Area Ratio: ${(metrics.maskAreaRatio * 100).toInt()}%", fontSize = 12.sp)
+                            Text(text = "• Silhouette Jaccard Index: ${(metrics.jaccardSilhouetteIndex * 100).toInt()}%", fontSize = 12.sp)
+                            Text(
+                                text = "• Protected Region ΔE_ab Color Drift: ${String.format("%.2f", metrics.protectedColorDriftDeltaE)} (Limit ≤ 5.0)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (metrics.colorFidelityAccepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            )
+                            if (metrics.fallbackTriggered) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(text = "⚠️ Fallback Reason: ${metrics.fallbackReason}", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     }
                 }
             }
@@ -171,6 +244,53 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                 }
             }
 
+            // Benchmark Trigger & Results Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "🧪 10-Craft Empirical Benchmark Suite", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Button(
+                                onClick = { viewModel.runStudioBenchmark() },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text("Run Test Suite", fontSize = 11.sp)
+                            }
+                        }
+                        if (viewModel.benchmarkResults.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(text = "Test Results across 10 Craft Categories:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            viewModel.benchmarkResults.forEach { res ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = "${res.craftName} (${res.category})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        Text(text = "ΔE_ab: ${String.format("%.1f", res.colorDriftDeltaE)} • Seg: ${(res.segmentationQualityScore * 100).toInt()}% • Time: ${res.processingTimeMs}ms", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Text(
+                                        text = if (res.fallbackTriggered) "FALLBACK 🛡️" else res.passStatus,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (res.fallbackTriggered) Color(0xFFD97706) else Color(0xFF059669)
+                                    )
+                                }
+                                Divider(modifier = Modifier.padding(vertical = 2.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            }
+                        }
+                    }
+                }
+            }
+
             // CV Pipeline Steps Breakdown Card
             item {
                 Card(
@@ -183,7 +303,7 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                             Text(text = "⚙️ Studio Pipeline Architecture", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                             Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primaryContainer) {
                                 Text(
-                                    text = if (viewModel.fidelityScore > 0f) "Fidelity: ${(viewModel.fidelityScore * 100).toInt()}%" else "Ready",
+                                    text = if (metrics != null) "Time: ${metrics.executionTimeMs}ms" else "Ready",
                                     fontSize = 11.sp,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                     fontWeight = FontWeight.Bold,

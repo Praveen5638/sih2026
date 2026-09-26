@@ -144,8 +144,8 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
     }
 
     var studioStageLogs by mutableStateOf<List<com.example.ai.ProcessingStageLog>>(emptyList())
-    var maskQualityScore by mutableStateOf(0f)
-    var fidelityScore by mutableStateOf(0f)
+    var studioMetrics by mutableStateOf<com.example.ai.StudioPipelineMetrics?>(null)
+    var benchmarkResults by mutableStateOf<List<com.example.ai.BenchmarkItemResult>>(emptyList())
 
     fun enhanceImage(imageUri: String) {
         originalImageUri = imageUri
@@ -158,11 +158,18 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
             val result = com.example.ai.ProductImageProcessor.runStudioPipeline(context, inputBitmap)
             enhancedImageUri = result.outputUri.toString()
             originalImageUri = result.outputUri.toString()
-            studioStageLogs = result.stageLogs
-            maskQualityScore = result.maskQualityScore
-            fidelityScore = result.fidelityScore
+            studioStageLogs = result.metrics.stageLogs
+            studioMetrics = result.metrics
             isAiProcessing = false
             onComplete()
+        }
+    }
+
+    fun runStudioBenchmark() {
+        viewModelScope.launch {
+            isAiProcessing = true
+            benchmarkResults = com.example.ai.ProductImageProcessor.runCraftBenchmarkSuite()
+            isAiProcessing = false
         }
     }
 
