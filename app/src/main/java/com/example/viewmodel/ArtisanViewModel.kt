@@ -200,25 +200,133 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun processVoiceTranscript(transcript: String, onComplete: () -> Unit) {
+    var listingSession by mutableStateOf(com.example.ai.ListingSession())
+
+    fun startVoiceListening(context: android.content.Context, onTranscript: (String) -> Unit = {}) {
+        com.example.ai.VoiceAssistEngine.initializeTts(context)
+        listingSession = listingSession.copy(
+            isRecording = true,
+            currentStage = com.example.ai.ConversationStage.LISTENING
+        )
+        com.example.ai.VoiceAssistEngine.startListening(
+            context = context,
+            onResult = { text ->
+                listingSession = listingSession.copy(
+                    isRecording = false,
+                    transcript = text,
+                    currentStage = com.example.ai.ConversationStage.TRANSCRIBING
+                )
+                onTranscript(text)
+                processConversationalSpeech(context, text) {}
+            },
+            onError = { error ->
+                listingSession = listingSession.copy(
+                    isRecording = false,
+                    currentStage = com.example.ai.ConversationStage.ERROR,
+                    currentQuestion = error
+                )
+            }
+        )
+    }
+
+    fun stopVoiceListening() {
+        com.example.ai.VoiceAssistEngine.stopListening()
+        listingSession = listingSession.copy(isRecording = false)
+    }
+
+    fun processConversationalSpeech(context: android.content.Context, transcript: String, onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             isAiProcessing = true
             voiceTranscript = transcript
+            listingSession = listingSession.copy(
+                transcript = transcript,
+                currentStage = com.example.ai.ConversationStage.EXTRACTING
+            )
+
+            // Slot filling
+            val slots = com.example.ai.VoiceAssistEngine.extractSlotsFromSpeech(transcript, artisanCraft)
+            if (!slots.productName.isNullOrBlank()) productName = slots.productName
+            if (!slots.material.isNullOrBlank()) material = slots.material
+            if (!slots.color.isNullOrBlank()) color = slots.color
+            if (!slots.technique.isNullOrBlank()) technique = slots.technique
+            if (!slots.productionTime.isNullOrBlank()) productionTime = slots.productionTime
+
+            // Structured LLM generation
             val result = GeminiAiHelper.generateCatalogFromVoice(transcript, artisanCraft)
-            productName = result.productName
-            category = result.category
-            craft = result.craft
-            material = result.material
-            technique = result.technique
-            color = result.color
-            dimensions = result.dimensions
-            productionTime = result.productionTime
+            productName = slots.productName ?: result.productName
+            category = slots.category ?: result.category
+            craft = slots.craft ?: result.craft
+            material = slots.material ?: result.material
+            technique = slots.technique ?: result.technique
+            color = slots.color ?: result.color
+            dimensions = result.dimensions.ifBlank { "Not specified" }
+            productionTime = slots.productionTime ?: result.productionTime
             descriptionHi = result.descriptionHi
             descriptionEn = result.descriptionEn
             seoTags = result.seoTags
+
+            listingSession = listingSession.copy(
+                productName = productName,
+                category = category,
+                craft = craft,
+                material = material,
+                color = color,
+                technique = technique,
+                dimensions = dimensions,
+                productionTime = productionTime,
+                descriptionHindi = descriptionHi,
+                descriptionEnglish = descriptionEn,
+                seoTags = seoTags,
+                currentStage = com.example.ai.ConversationStage.REVIEWING
+            )
+
             isAiProcessing = false
             onComplete()
         }
+    }
+
+    fun processVoiceCommand(context: android.content.Context, commandText: String) {
+        val classified = com.example.ai.VoiceAssistEngine.classifyVoiceCommand(commandText)
+        listingSession = listingSession.copy(lastVoiceCommand = commandText)
+
+        when (classified.intent) {
+            "SAVE_PRODUCT" -> {
+                saveCurrentProduct { currentScreen = AppScreen.HOME }
+            }
+            "NAVIGATE_PRICING" -> {
+                currentScreen = AppScreen.PRICING_ASSISTANT
+            }
+            "REPEAT_TTS" -> {
+                speakListingSummary(context)
+            }
+            "EDIT_FIELD" -> {
+                when (classified.targetField) {
+                    "productName" -> productName = classified.newValue ?: productName
+                    "material" -> material = classified.newValue ?: material
+                    "color" -> color = classified.newValue ?: color
+                    "technique" -> technique = classified.newValue ?: technique
+                    "productionTime" -> productionTime = classified.newValue ?: productionTime
+                }
+                speakListingSummary(context)
+            }
+            "CONFIRM" -> {
+                currentScreen = AppScreen.PRICING_ASSISTANT
+            }
+        }
+    }
+
+    fun speakListingSummary(context: android.content.Context) {
+        com.example.ai.VoiceAssistEngine.initializeTts(context) {
+            val summaryText = "Product $productName ready hai. Material $material, Technique $technique hai. Kya details sahi hain?"
+            listingSession = listingSession.copy(isSpeakingTTS = true)
+            com.example.ai.VoiceAssistEngine.speakReadBack(summaryText) {
+                listingSession = listingSession.copy(isSpeakingTTS = false)
+            }
+        }
+    }
+
+    fun processVoiceTranscript(transcript: String, onComplete: () -> Unit) {
+        processConversationalSpeech(getApplication(), transcript, onComplete)
     }
 
     fun calculatePricing(onComplete: () -> Unit) {

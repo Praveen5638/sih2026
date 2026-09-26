@@ -416,13 +416,14 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceCatalogerScreen(viewModel: ArtisanViewModel) {
+    val context = LocalContext.current
+    val session = viewModel.listingSession
     var transcriptInput by remember { mutableStateOf(viewModel.voiceTranscript.ifBlank { "Ye Banarasi silk ki saree hai, isme zari ka kaam hai, maroon rang ki hai aur banane mein paanch din lage." }) }
-    var isRecording by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Multilingual Auto-Cataloger / वॉयस कैटलॉग") },
+                title = { Text("Voice Business Assistant / वॉयस सहायक") },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.currentScreen = AppScreen.IMAGE_STUDIO }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -431,84 +432,174 @@ fun VoiceCatalogerScreen(viewModel: ArtisanViewModel) {
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            LinearProgressIndicator(progress = { 0.50f }, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Step 2: Describe Product in Your Language", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Text(text = "Speak or type naturally in Hindi, English, or regional language", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            Spacer(modifier = Modifier.height(20.dp))
+            item {
+                LinearProgressIndicator(progress = { 0.50f }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = "Step 2: Describe Product by Voice in Your Language", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(text = "Speak naturally in Hindi, English, or regional language. Minimal typing needed!", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            }
 
-            // Interactive Mic Button with Recording State
-            Surface(
-                onClick = { isRecording = !isRecording },
-                shape = RoundedCornerShape(50.dp),
-                color = if (isRecording) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(100.dp),
-                shadowElevation = if (isRecording) 8.dp else 2.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                        contentDescription = "Record",
-                        modifier = Modifier.size(48.dp),
-                        tint = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            // Large Interactive Microphone Button
+            item {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        onClick = {
+                            if (session.isRecording) {
+                                viewModel.stopVoiceListening()
+                            } else {
+                                viewModel.startVoiceListening(context) { text ->
+                                    transcriptInput = text
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(50.dp),
+                        color = if (session.isRecording) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(104.dp),
+                        shadowElevation = if (session.isRecording) 12.dp else 4.dp
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (session.isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                                contentDescription = "Record Voice",
+                                modifier = Modifier.size(52.dp),
+                                tint = if (session.isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (session.isRecording) "Listening... Speak now in Hindi / English 🔴" else "Tap Mic & Speak Naturally",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = if (session.isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = if (isRecording) "Recording voice... Tap to stop 🔴" else "Tap to Record Voice Note",
-                fontWeight = FontWeight.Bold,
-                color = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
 
-            // Quick Sample Voice Presets
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AssistChip(onClick = { transcriptInput = "Ye Banarasi silk ki saree hai, zari ka kaam hai." }, label = { Text("Saree") })
-                AssistChip(onClick = { transcriptInput = "Mitti ka handcrafted diya hai, Diwali special." }, label = { Text("Diya") })
-                AssistChip(onClick = { transcriptInput = "Brass ki shandar murti hai, handmade polish." }, label = { Text("Brass Idol") })
+            // Quick Voice Presets Chips
+            item {
+                Column {
+                    Text("Sample Artisan Voice Presets:", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(
+                            onClick = {
+                                transcriptInput = "Ye Banarasi silk ki saree hai, red color, zari ka kaam hai, 5 din lage."
+                                viewModel.processConversationalSpeech(context, transcriptInput) {}
+                            },
+                            label = { Text("Banarasi Saree", fontSize = 11.sp) }
+                        )
+                        AssistChip(
+                            onClick = {
+                                transcriptInput = "Mitti ka handcrafted terracotta diya hai, natural red clay, 2 din lage."
+                                viewModel.processConversationalSpeech(context, transcriptInput) {}
+                            },
+                            label = { Text("Terracotta Diya", fontSize = 11.sp) }
+                        )
+                        AssistChip(
+                            onClick = {
+                                transcriptInput = "Brass ki handcrafted idol murti hai, golden shine, hand carved polish."
+                                viewModel.processConversationalSpeech(context, transcriptInput) {}
+                            },
+                            label = { Text("Brass Idol", fontSize = 11.sp) }
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = transcriptInput,
-                onValueChange = { transcriptInput = it },
-                label = { Text("Voice Transcription / Description") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-                    .testTag("transcript_input"),
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            if (viewModel.isAiProcessing) {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("AI is extracting structured product details...")
-            } else {
-                Button(
-                    onClick = {
-                        viewModel.processVoiceTranscript(transcriptInput) {
-                            viewModel.currentScreen = AppScreen.AI_REVIEW
+            // Live Context-Aware Extracted Slots Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "✨ Voice Extracted Product Slots", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            IconButton(onClick = { viewModel.speakListingSummary(context) }) {
+                                Icon(Icons.Default.VolumeUp, contentDescription = "Read Back", tint = MaterialTheme.colorScheme.primary)
+                            }
                         }
-                    },
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(text = "• Product: ${viewModel.productName.ifBlank { "Listening..." }}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "• Material: ${viewModel.material.ifBlank { "Not specified" }}", fontSize = 12.sp)
+                        Text(text = "• Color: ${viewModel.color.ifBlank { "Not specified" }}", fontSize = 12.sp)
+                        Text(text = "• Technique: ${viewModel.technique.ifBlank { "Not specified" }}", fontSize = 12.sp)
+                        Text(text = "• Production Time: ${viewModel.productionTime.ifBlank { "Not specified" }}", fontSize = 12.sp)
+                    }
+                }
+            }
+
+            // Voice Command Edits Row
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Quick Voice Edits:", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(
+                            selected = false,
+                            onClick = { viewModel.processVoiceCommand(context, "Color red karo") },
+                            label = { Text("Color Red karo", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = { viewModel.processVoiceCommand(context, "Production time 5 din karo") },
+                            label = { Text("Time 5 Din", fontSize = 11.sp) }
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = { viewModel.speakListingSummary(context) },
+                            label = { Text("🔊 Sunayein", fontSize = 11.sp) }
+                        )
+                    }
+                }
+            }
+
+            // Transcript Display / Fallback Typing Field
+            item {
+                OutlinedTextField(
+                    value = transcriptInput,
+                    onValueChange = { transcriptInput = it },
+                    label = { Text("Voice Transcription / Description (या टाइप करें)") },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
-                        .testTag("generate_listing_button"),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("Generate AI Listing / लिस्टिंग बनाएं", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        .height(100.dp)
+                        .testTag("transcript_input"),
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+
+            item {
+                if (viewModel.isAiProcessing) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("AI Assistant is extracting structured details & generating bilingual listing...")
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            viewModel.processConversationalSpeech(context, transcriptInput) {
+                                viewModel.currentScreen = AppScreen.AI_REVIEW
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .testTag("generate_listing_button"),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("Confirm & Review AI Listing →", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
