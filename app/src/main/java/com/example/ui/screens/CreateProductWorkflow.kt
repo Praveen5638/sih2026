@@ -31,6 +31,100 @@ import com.example.viewmodel.AppScreen
 import com.example.viewmodel.ArtisanViewModel
 import java.io.File
 
+@Composable
+fun NetworkStatusHeader(viewModel: ArtisanViewModel) {
+    val netState by viewModel.networkState.collectAsState()
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = when (netState) {
+            com.example.network.NetworkState.ONLINE -> Color(0xFFD1FAE5)
+            com.example.network.NetworkState.OFFLINE -> Color(0xFFFEF3C7)
+            com.example.network.NetworkState.SYNCING -> Color(0xFFDBEAFE)
+            com.example.network.NetworkState.UNSTABLE -> Color(0xFFFEE2E2)
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = when (netState) {
+                        com.example.network.NetworkState.ONLINE -> Icons.Default.CloudDone
+                        com.example.network.NetworkState.OFFLINE -> Icons.Default.CloudOff
+                        com.example.network.NetworkState.SYNCING -> Icons.Default.Sync
+                        com.example.network.NetworkState.UNSTABLE -> Icons.Default.SignalCellularConnectedNoInternet0Bar
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = when (netState) {
+                        com.example.network.NetworkState.ONLINE -> Color(0xFF047857)
+                        com.example.network.NetworkState.OFFLINE -> Color(0xFFB45309)
+                        com.example.network.NetworkState.SYNCING -> Color(0xFF1D4ED8)
+                        com.example.network.NetworkState.UNSTABLE -> Color(0xFFB91C1C)
+                    }
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = when (netState) {
+                        com.example.network.NetworkState.ONLINE -> "Online • Local Save & Cloud Sync Ready"
+                        com.example.network.NetworkState.OFFLINE -> "Offline Mode • Saved Safely On Device 📱"
+                        com.example.network.NetworkState.SYNCING -> "Syncing Changes to Server..."
+                        com.example.network.NetworkState.UNSTABLE -> "Limited Network • Working Offline First"
+                    },
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = when (netState) {
+                        com.example.network.NetworkState.ONLINE -> Color(0xFF047857)
+                        com.example.network.NetworkState.OFFLINE -> Color(0xFFB45309)
+                        com.example.network.NetworkState.SYNCING -> Color(0xFF1D4ED8)
+                        com.example.network.NetworkState.UNSTABLE -> Color(0xFFB91C1C)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun RecoverableDraftBanner(viewModel: ArtisanViewModel) {
+    val draft = viewModel.recoverableDraft
+    if (draft != null) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text(text = "Unsaved Draft Found! 📂", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(text = "Product: ${draft.productName.ifBlank { "Untitled Craft" }} (${draft.currentStepName})", fontSize = 11.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { viewModel.restoreDraft(draft) },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("Restore Saved Draft", fontSize = 11.sp)
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.recoverableDraft = null },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("Discard", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImageStudioScreen(viewModel: ArtisanViewModel) {
@@ -46,7 +140,9 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && cameraTempUri != null) {
-            viewModel.processCameraUriInput(context, cameraTempUri!!) {}
+            viewModel.processCameraUriInput(context, cameraTempUri!!) {
+                viewModel.saveDraftCheckpoint()
+            }
         }
     }
 
@@ -55,7 +151,9 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            viewModel.processCameraUriInput(context, uri) {}
+            viewModel.processCameraUriInput(context, uri) {
+                viewModel.saveDraftCheckpoint()
+            }
         }
     }
 
@@ -76,9 +174,12 @@ fun ImageStudioScreen(viewModel: ArtisanViewModel) {
                 .fillMaxSize()
                 .padding(padding)
                 .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+            item {
+                NetworkStatusHeader(viewModel)
+            }
+            item {
+                RecoverableDraftBanner(viewModel)
+            }
             item {
                 LinearProgressIndicator(progress = { 0.25f }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(4.dp))

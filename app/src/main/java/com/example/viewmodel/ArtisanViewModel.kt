@@ -56,9 +56,76 @@ data class BuyerOrder(
 class ArtisanViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: ArtisanRepository
 
+    val networkState: StateFlow<com.example.network.NetworkState> = com.example.network.NetworkMonitor.networkState
+
+    var recoverableDraft by mutableStateOf<com.example.data.ProductDraftEntity?>(null)
+
     init {
-        val productDao = AppDatabase.getDatabase(application).productDao()
-        repository = ArtisanRepository(productDao)
+        val db = AppDatabase.getDatabase(application)
+        repository = ArtisanRepository(db.productDao(), db.draftDao(), db.syncDao())
+        com.example.network.NetworkMonitor.initialize(application)
+        checkAndRestoreDraft()
+    }
+
+    fun checkAndRestoreDraft() {
+        viewModelScope.launch {
+            val draft = repository.getRecoverableDraft()
+            if (draft != null && (draft.productName.isNotBlank() || draft.originalImageUrl.isNotBlank() || draft.transcript.isNotBlank())) {
+                recoverableDraft = draft
+            }
+        }
+    }
+
+    fun restoreDraft(draft: com.example.data.ProductDraftEntity) {
+        productName = draft.productName
+        category = draft.category
+        craft = draft.craft
+        material = draft.material
+        technique = draft.technique
+        color = draft.color
+        dimensions = draft.dimensions
+        productionTime = draft.productionTime
+        descriptionHi = draft.descriptionHi
+        descriptionEn = draft.descriptionEn
+        seoTags = draft.seoTags
+        voiceTranscript = draft.transcript
+        originalImageUri = draft.originalImageUrl
+        enhancedImageUri = draft.enhancedImageUrl
+        userSelectedPhotoChoice = draft.userSelectedPhotoChoice
+        materialCostInput = draft.materialCost.toInt().toString()
+        labourCostInput = draft.labourCost.toInt().toString()
+        otherCostInput = draft.otherCost.toInt().toString()
+        sellingPriceInput = draft.sellingPrice.toInt().toString()
+        recoverableDraft = null
+    }
+
+    fun saveDraftCheckpoint() {
+        viewModelScope.launch {
+            val draft = com.example.data.ProductDraftEntity(
+                currentStepName = currentScreen.name,
+                productName = productName,
+                category = category,
+                craft = craft,
+                material = material,
+                technique = technique,
+                color = color,
+                dimensions = dimensions,
+                productionTime = productionTime,
+                descriptionHi = descriptionHi,
+                descriptionEn = descriptionEn,
+                seoTags = seoTags,
+                transcript = voiceTranscript,
+                originalImageUrl = originalImageUri,
+                enhancedImageUrl = enhancedImageUri,
+                userSelectedPhotoChoice = userSelectedPhotoChoice,
+                materialCost = materialCostInput.toDoubleOrNull() ?: 800.0,
+                labourCost = labourCostInput.toDoubleOrNull() ?: 400.0,
+                otherCost = otherCostInput.toDoubleOrNull() ?: 120.0,
+                costFloor = (materialCostInput.toDoubleOrNull() ?: 800.0) + (labourCostInput.toDoubleOrNull() ?: 400.0) + (otherCostInput.toDoubleOrNull() ?: 120.0),
+                sellingPrice = sellingPriceInput.toDoubleOrNull() ?: 1750.0
+            )
+            repository.saveDraftCheckpoint(draft)
+        }
     }
 
     val allProducts: StateFlow<List<ProductEntity>> = repository.allProducts
@@ -421,7 +488,8 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
                 pricingEngineVersion = rec?.pricingEngineVersion ?: "v1-hardened",
                 status = status
             )
-            repository.insertProduct(entity)
+            repository.saveProductLocallyFirst(getApplication(), entity)
+            resetProductDraft()
             onSaved()
         }
     }
