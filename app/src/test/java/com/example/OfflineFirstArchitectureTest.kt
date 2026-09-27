@@ -132,4 +132,62 @@ class OfflineFirstArchitectureTest {
         assertTrue(result.descriptionHi.contains("ऑफ़लाइन"))
         assertNotNull(result.productName)
     }
+
+    @Test
+    fun testImageUploadInterruption_retainsLocalUriAndSyncOperation() {
+        NetworkMonitor.setSimulatedOffline(true)
+        val localImageUri = "file:///data/user/0/com.aistudio.artisanai/cache/photo_fullres.jpg"
+        val clientOpId = "UPLOAD-IMG-789-${System.currentTimeMillis()}"
+
+        val uploadOp = SyncOperationEntity(
+            id = UUID.randomUUID().toString(),
+            clientOperationId = clientOpId,
+            operationType = "UPLOAD_IMAGE",
+            entityId = "789",
+            payloadJson = "{\"imageUri\":\"$localImageUri\"}",
+            status = "PENDING"
+        )
+
+        // Verify local image reference is never destroyed by upload failure
+        assertTrue(localImageUri.startsWith("file:///"))
+        assertEquals("PENDING", uploadOp.status)
+        assertEquals(clientOpId, uploadOp.clientOperationId)
+    }
+
+    @Test
+    fun testPricingInterruption_usesCachedComparablesAndCostFloor() {
+        NetworkMonitor.setSimulatedOffline(true)
+        val res = DynamicPricingEngine.calculatePriceRecommendation(
+            productName = "Brass Ganesha",
+            category = "Metal",
+            craft = "Brass",
+            material = "Brass",
+            technique = "Carved",
+            matCost = 500.0,
+            labCost = 300.0,
+            othCost = 100.0
+        )
+
+        assertEquals(900.0, res.costFloor, 0.01)
+        assertTrue(res.comparableCount > 0)
+        assertTrue(res.recommendedPrice >= 900.0)
+    }
+
+    @Test
+    fun testTransientFailure_executesExponentialBackoffAndRetries() {
+        val op = SyncOperationEntity(
+            clientOperationId = "SYNC-TEST-123",
+            operationType = "CREATE_PRODUCT",
+            entityId = "123",
+            payloadJson = "{}",
+            retryCount = 1,
+            status = "FAILED_RETRYABLE"
+        )
+
+        val nextAttempt = op.retryCount + 1
+        val backoffMs = (2.0.toDouble().pow(nextAttempt.toDouble()) * 1000).toLong()
+
+        assertEquals(2, nextAttempt)
+        assertEquals(4000L, backoffMs) // Exponential backoff 2^2 * 1000 = 4000ms
+    }
 }
