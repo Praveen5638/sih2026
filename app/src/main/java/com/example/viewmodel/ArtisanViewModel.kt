@@ -12,11 +12,15 @@ import com.example.data.ProductEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 enum class AppScreen {
     MARKETPLACE_HOME,      // Default Public Buyer Catalog Home Page
@@ -42,7 +46,9 @@ enum class AppScreen {
     CATALOG,
     PRODUCT_DETAIL,
     PRODUCT_EDIT,
-    PUBLIC_PRODUCT_DETAIL
+    PUBLIC_PRODUCT_DETAIL,
+    CONVERSATION_LIST,
+    CHAT_ROOM
 }
 
 data class BuyerOrder(
@@ -63,10 +69,11 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         val db = AppDatabase.getDatabase(application)
-        repository = ArtisanRepository(db.productDao(), db.draftDao(), db.syncDao())
+        repository = ArtisanRepository(db.productDao(), db.draftDao(), db.syncDao(), db.conversationDao(), db.messageDao())
         com.example.network.NetworkMonitor.initialize(application)
         checkAndRestoreDraft()
     }
+
 
     fun checkAndRestoreDraft() {
         viewModelScope.launch {
@@ -508,4 +515,168 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
             repository.deleteProduct(id)
         }
     }
+
+    // ============================================================
+    // PHASE 3: CONVERSATION & VOICE/TEXT NEGOTIATION MANAGEMENT
+    // ============================================================
+
+    val allConversations: StateFlow<List<com.example.data.ConversationEntity>> = repository.allConversations
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    var activeConversationId by mutableStateOf<String?>(null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val activeMessages: StateFlow<List<com.example.data.MessageEntity>> =
+        snapshotFlow { activeConversationId }
+            .flatMapLatest { id ->
+                if (id != null) repository.getMessagesForConversation(id)
+                else flowOf(emptyList())
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val activeConversation: StateFlow<com.example.data.ConversationEntity?> =
+        snapshotFlow { activeConversationId }
+            .flatMapLatest { id ->
+                if (id != null) repository.getConversationById(id)
+                else flowOf(null)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = null
+            )
+
+    // Voice Reply Transcript & Terms Review State (Mandatory Review Before Sending)
+    var voiceReplyTranscript by mutableStateOf("")
+    var isVoiceReplyRecording by mutableStateOf(false)
+    var isVoiceReplyPreviewVisible by mutableStateOf(false)
+    var extractedQuantityInput by mutableStateOf("")
+    var extractedUnitPriceInput by mutableStateOf("")
+    var userSenderRole by mutableStateOf("SELLER") // "SELLER" or "BUYER"
+
+    fun startVoiceReplyListening(context: android.content.Context) {
+        com.example.ai.VoiceAssistEngine.initializeTts(context)
+        isVoiceReplyRecording = true
+        com.example.ai.VoiceAssistEngine.startListening(
+            context = context,
+            onResult = { transcript ->
+                isVoiceReplyRecording = false
+                processVoiceReplyTranscript(transcript)
+            },
+            onError = { err ->
+                isVoiceReplyRecording = false
+            }
+        )
+    }
+
+    fun stopVoiceReplyListening() {
+        com.example.ai.VoiceAssistEngine.stopListening()
+        isVoiceReplyRecording = false
+    }
+
+    fun processVoiceReplyTranscript(transcript: String) {
+        voiceReplyTranscript = transcript
+        val terms = com.example.ai.VoiceAssistEngine.extractCommercialTermsFromText(transcript)
+        extractedQuantityInput = terms.quantity?.toString() ?: ""
+        extractedUnitPriceInput = terms.unitPrice?.toInt()?.toString() ?: ""
+        isVoiceReplyPreviewVisible = true
+    }
+
+    fun sendVoiceReplyFromPreview(context: android.content.Context) {
+        val convId = activeConversationId ?: return
+        val text = voiceReplyTranscript.ifBlank { "Voice response" }
+        val qty = extractedQuantityInput.toIntOrNull()
+        val price = extractedUnitPriceInput.toDoubleOrNull()
+        val sender = if (userSenderRole == "BUYER") buyerName.ifBlank { "Buyer" } else artisanName.ifBlank { "Artisan" }
+
+        viewModelScope.launch {
+            repository.sendMessageLocallyFirst(
+                context = context,
+                conversationId = convId,
+                senderId = sender,
+                senderType = userSenderRole,
+                text = text,
+                messageType = "VOICE_TRANSCRIPT",
+                extractedQuantity = qty,
+                extractedPrice = price
+            )
+            dismissVoiceReplyPreview()
+        }
+    }
+
+    fun dismissVoiceReplyPreview() {
+        isVoiceReplyPreviewVisible = false
+        voiceReplyTranscript = ""
+        extractedQuantityInput = ""
+        extractedUnitPriceInput = ""
+    }
+
+    fun sendTextMessage(context: android.content.Context, text: String) {
+        val convId = activeConversationId ?: return
+        if (text.isBlank()) return
+        val sender = if (userSenderRole == "BUYER") buyerName.ifBlank { "Buyer" } else artisanName.ifBlank { "Artisan" }
+        val terms = com.example.ai.VoiceAssistEngine.extractCommercialTermsFromText(text)
+
+        viewModelScope.launch {
+            repository.sendMessageLocallyFirst(
+                context = context,
+                conversationId = convId,
+                senderId = sender,
+                senderType = userSenderRole,
+                text = text,
+                messageType = "TEXT",
+                extractedQuantity = terms.quantity,
+                extractedPrice = terms.unitPrice
+            )
+        }
+    }
+
+    fun speakMessageWithTts(context: android.content.Context, text: String) {
+        com.example.ai.TtsQueueManager.playSingleMessage(context, text)
+    }
+
+    fun openOrCreateConversationForProduct(context: android.content.Context, product: ProductEntity, isBuyer: Boolean = true) {
+        userSenderRole = if (isBuyer) "BUYER" else "SELLER"
+        viewModelScope.launch {
+            val bName = if (buyerName.isNotBlank()) buyerName else "Anil Sharma"
+            val conv = repository.getOrCreateConversation(
+                productId = product.id,
+                productName = product.productName,
+                buyerId = if (isBuyer) "BUYER-101" else "BUYER-101",
+                buyerName = bName,
+                artisanName = artisanName.ifBlank { "Ramesh Kumar" },
+                initialPrice = product.sellingPrice
+            )
+            activeConversationId = conv.conversationId
+            currentScreen = AppScreen.CHAT_ROOM
+        }
+    }
+
+    fun openConversation(conversationId: String, role: String = "SELLER") {
+        userSenderRole = role
+        activeConversationId = conversationId
+        currentScreen = AppScreen.CHAT_ROOM
+    }
+
+    fun confirmTerms(context: android.content.Context, conversationId: String, qty: Int, price: Double) {
+        viewModelScope.launch {
+            repository.confirmNegotiationTerms(
+                context = context,
+                conversationId = conversationId,
+                confirmedQuantity = qty,
+                confirmedUnitPrice = price,
+                confirmedByRole = userSenderRole
+            )
+        }
+    }
 }
+

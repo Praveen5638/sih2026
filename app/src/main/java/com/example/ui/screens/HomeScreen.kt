@@ -58,6 +58,9 @@ fun HomeScreen(viewModel: ArtisanViewModel) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.currentScreen = AppScreen.CONVERSATION_LIST }) {
+                        Icon(Icons.Default.Chat, contentDescription = "Customer Enquiries", tint = MaterialTheme.colorScheme.primary)
+                    }
                     IconButton(onClick = { viewModel.currentScreen = AppScreen.SELLER_PROFILE }) {
                         Icon(Icons.Default.Storefront, contentDescription = "Store Profile", tint = MaterialTheme.colorScheme.primary)
                     }
@@ -71,6 +74,12 @@ fun HomeScreen(viewModel: ArtisanViewModel) {
                     onClick = {},
                     icon = { Icon(Icons.Default.Home, contentDescription = null) },
                     label = { Text("Home") }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = { viewModel.currentScreen = AppScreen.CONVERSATION_LIST },
+                    icon = { Icon(Icons.Default.Chat, contentDescription = null) },
+                    label = { Text("Enquiries") }
                 )
                 NavigationBarItem(
                     selected = false,
@@ -94,6 +103,60 @@ fun HomeScreen(viewModel: ArtisanViewModel) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                val conversations by viewModel.allConversations.collectAsState(initial = emptyList())
+                val unreadOrActiveCount = conversations.size
+
+                // Customer Enquiries & Voice Negotiations Card
+                Card(
+                    onClick = { viewModel.currentScreen = AppScreen.CONVERSATION_LIST },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "💬 Customer Enquiries & Negotiations",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                if (unreadOrActiveCount > 0) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary
+                                    ) {
+                                        Text(
+                                            text = "$unreadOrActiveCount",
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Bilingual voice negotiation, pricing offers & order locking",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                        Icon(Icons.Default.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                    }
+                }
+            }
+
             item {
                 // Buyer Marketplace Switch Banner
                 Card(

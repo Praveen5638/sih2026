@@ -241,4 +241,39 @@ object VoiceAssistEngine {
             }
         }
     }
+
+    // Extract Commercial Negotiation Terms (Quantity & Unit Price) from natural text / transcript
+    fun extractCommercialTermsFromText(text: String): ExtractedCommercialTerms {
+        val lower = text.lowercase()
+
+        // Quantity matching (e.g. "50 pcs", "50 units", "50 pieces", "quantity 50", "50 थान")
+        val qtyMatch = Regex("(?:(\\d+)\\s*(?:pcs|pcs\\.|units|pieces|piece|थान|पीस|नग))|(?:quantity\\s*(\\d+))|(?:(\\d+)\\s*chahiye)").find(lower)
+        val extractedQty = qtyMatch?.groupValues?.drop(1)?.firstOrNull { it.isNotBlank() }?.toIntOrNull()
+
+        // Price matching (e.g. "₹1500", "1500 rs", "1500 rupees", "price 1500", "₹1500 per unit")
+        val priceMatch = Regex("(?:[₹$]|rs\\.?|rupees?|रुपये|रूपये|price|rate|भाव)\\s*(\\d+(?:\\.\\d+)?)").find(lower)
+            ?: Regex("(\\d+(?:\\.\\d+)?)\\s*(?:[₹$]|rs\\.?|rupees?|रुपये|रूपये|per|mein|में)").find(lower)
+
+        var extractedPrice = priceMatch?.groupValues?.get(1)?.toDoubleOrNull()
+
+        if (extractedPrice == null) {
+            val allNumbers = Regex("(\\d+(?:\\.\\d+)?)").findAll(text).mapNotNull { it.groupValues[1].toDoubleOrNull() }.toList()
+            if (allNumbers.size == 2 && extractedQty != null) {
+                extractedPrice = allNumbers.firstOrNull { it.toInt() != extractedQty }
+            } else if (allNumbers.size == 1 && extractedQty == null) {
+                val singleNum = allNumbers[0]
+                if (singleNum >= 100.0) {
+                    extractedPrice = singleNum
+                }
+            }
+        }
+
+        return ExtractedCommercialTerms(quantity = extractedQty, unitPrice = extractedPrice)
+    }
 }
+
+data class ExtractedCommercialTerms(
+    val quantity: Int? = null,
+    val unitPrice: Double? = null
+)
+

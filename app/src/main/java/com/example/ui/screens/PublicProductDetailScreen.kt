@@ -102,22 +102,40 @@ fun PublicProductDetailScreen(viewModel: ArtisanViewModel) {
                 }
 
                 item {
-                    Button(
-                        onClick = {
-                            if (!viewModel.isBuyerLoggedIn) {
-                                viewModel.currentScreen = AppScreen.BUYER_LOGIN
-                            } else {
-                                buyDialog = true
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Default.ShoppingCart, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (viewModel.isBuyerLoggedIn) "Buy Now / खरीदें (₹${product.sellingPrice.toInt()})" else "Login to Buy / खरीदें", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.openOrCreateConversationForProduct(context, product, isBuyer = true)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Chat, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("💬 Voice / Text Negotiate with Artisan", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                if (!viewModel.isBuyerLoggedIn) {
+                                    viewModel.currentScreen = AppScreen.BUYER_LOGIN
+                                } else {
+                                    buyDialog = true
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Icon(Icons.Default.ShoppingCart, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (viewModel.isBuyerLoggedIn) "Buy Now / खरीदें (₹${product.sellingPrice.toInt()})" else "Login to Buy / खरीदें", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

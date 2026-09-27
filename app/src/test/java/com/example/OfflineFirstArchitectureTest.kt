@@ -231,4 +231,86 @@ class OfflineFirstArchitectureTest {
         assertEquals(550.0, updatedProduct.costFloor, 0.01)
         assertTrue(updatedProduct.sellingPrice >= updatedProduct.costFloor)
     }
+
+    // ============================================================
+    // PHASE 3: BUYER ↔ ARTISAN VOICE & TEXT NEGOTIATION TESTS
+    // ============================================================
+
+    @Test
+    fun testPhase3VoiceNegotiation_extractsCommercialTerms() {
+        val transcript1 = "Mujhe 50 pcs ₹1500 me chahiye"
+        val terms1 = com.example.ai.VoiceAssistEngine.extractCommercialTermsFromText(transcript1)
+        assertEquals(50, terms1.quantity)
+        assertEquals(1500.0, terms1.unitPrice!!, 0.01)
+
+        val transcript2 = "100 units final price ₹1200 per pc"
+        val terms2 = com.example.ai.VoiceAssistEngine.extractCommercialTermsFromText(transcript2)
+        assertEquals(100, terms2.quantity)
+        assertEquals(1200.0, terms2.unitPrice!!, 0.01)
+    }
+
+    @Test
+    fun testPhase3VoiceNegotiation_localMessageCreationAndOutboxSync() {
+        val conversationId = "CONV-101-BUYER-101"
+        val clientMsgId = "MSG-CLIENT-${UUID.randomUUID()}"
+        val messageId = "MSG-${UUID.randomUUID()}"
+
+        val message = com.example.data.MessageEntity(
+            messageId = messageId,
+            conversationId = conversationId,
+            clientMessageId = clientMsgId,
+            senderId = "BUYER-101",
+            senderType = "BUYER",
+            text = "Kya aap 50 pcs ₹1400 me de sakte hain?",
+            messageType = "VOICE_TRANSCRIPT",
+            extractedQuantity = 50,
+            extractedPrice = 1400.0,
+            status = "PENDING"
+        )
+
+        val syncOp = SyncOperationEntity(
+            id = UUID.randomUUID().toString(),
+            clientOperationId = clientMsgId,
+            operationType = "SEND_MESSAGE",
+            entityId = messageId,
+            payloadJson = "{\"messageId\":\"$messageId\",\"conversationId\":\"$conversationId\",\"text\":\"${message.text}\"}",
+            status = "PENDING"
+        )
+
+        assertEquals(clientMsgId, message.clientMessageId)
+        assertEquals(clientMsgId, syncOp.clientOperationId)
+        assertEquals("SEND_MESSAGE", syncOp.operationType)
+        assertEquals(50, message.extractedQuantity)
+        assertEquals(1400.0, message.extractedPrice!!, 0.01)
+    }
+
+    @Test
+    fun testPhase3VoiceNegotiation_confirmTerms_updatesStatusToOrderReady() {
+        val initialConv = com.example.data.ConversationEntity(
+            conversationId = "CONV-101-BUYER-101",
+            productId = 101L,
+            productName = "Banarasi Silk Saree",
+            buyerId = "BUYER-101",
+            buyerName = "Anil Sharma",
+            artisanName = "Ramesh Kumar",
+            currentStatus = "NEGOTIATING",
+            agreedQuantity = 50,
+            agreedUnitPrice = 1400.0
+        )
+
+        val confirmedConv = initialConv.copy(
+            buyerConfirmed = true,
+            sellerConfirmed = true,
+            currentStatus = "ORDER_READY",
+            lastMessageText = "✅ Terms Confirmed: 50 pcs @ ₹1400/pc. Order Ready!"
+        )
+
+        assertEquals("ORDER_READY", confirmedConv.currentStatus)
+        assertTrue(confirmedConv.buyerConfirmed)
+        assertTrue(confirmedConv.sellerConfirmed)
+        assertEquals(50, confirmedConv.agreedQuantity)
+        assertEquals(1400.0, confirmedConv.agreedUnitPrice, 0.01)
+        assertEquals(70000.0, confirmedConv.agreedQuantity * confirmedConv.agreedUnitPrice, 0.01)
+    }
 }
+

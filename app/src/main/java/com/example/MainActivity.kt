@@ -42,6 +42,8 @@ class MainActivity : ComponentActivity() {
                         AppScreen.CATALOG -> CatalogScreen(viewModel)
                         AppScreen.PRODUCT_DETAIL -> ProductDetailScreen(viewModel)
                         AppScreen.PRODUCT_EDIT -> ProductEditScreen(viewModel)
+                        AppScreen.CONVERSATION_LIST -> ConversationListScreen(viewModel)
+                        AppScreen.CHAT_ROOM -> ChatRoomScreen(viewModel)
                         else -> MarketplaceHomeScreen(viewModel)
                     }
                 }
