@@ -33,7 +33,10 @@ fun HomeScreen(viewModel: ArtisanViewModel) {
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { viewModel.currentScreen = AppScreen.SELLER_PROFILE }
+                    ) {
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primaryContainer,
@@ -55,8 +58,8 @@ fun HomeScreen(viewModel: ArtisanViewModel) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.currentScreen = AppScreen.BUYER_MARKETPLACE }) {
-                        Icon(Icons.Default.Storefront, contentDescription = "Buyer Marketplace", tint = MaterialTheme.colorScheme.primary)
+                    IconButton(onClick = { viewModel.currentScreen = AppScreen.SELLER_PROFILE }) {
+                        Icon(Icons.Default.Storefront, contentDescription = "Store Profile", tint = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
@@ -77,9 +80,9 @@ fun HomeScreen(viewModel: ArtisanViewModel) {
                 )
                 NavigationBarItem(
                     selected = false,
-                    onClick = { viewModel.currentScreen = AppScreen.BUYER_MARKETPLACE },
+                    onClick = { viewModel.currentScreen = AppScreen.SELLER_PROFILE },
                     icon = { Icon(Icons.Default.Storefront, contentDescription = null) },
-                    label = { Text("Marketplace") }
+                    label = { Text("My Store") }
                 )
             }
         }

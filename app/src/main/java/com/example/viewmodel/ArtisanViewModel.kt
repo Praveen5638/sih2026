@@ -41,6 +41,7 @@ enum class AppScreen {
     FINAL_PREVIEW,
     CATALOG,
     PRODUCT_DETAIL,
+    PRODUCT_EDIT,
     PUBLIC_PRODUCT_DETAIL
 }
 
@@ -491,6 +492,14 @@ class ArtisanViewModel(application: Application) : AndroidViewModel(application)
             repository.saveProductLocallyFirst(getApplication(), entity)
             resetProductDraft()
             onSaved()
+        }
+    }
+
+    fun updateProduct(product: ProductEntity, onUpdated: () -> Unit = {}) {
+        viewModelScope.launch {
+            repository.updateProduct(product)
+            repository.saveProductLocallyFirst(getApplication(), product)
+            onUpdated()
         }
     }
 

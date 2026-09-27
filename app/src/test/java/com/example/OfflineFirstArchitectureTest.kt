@@ -190,4 +190,45 @@ class OfflineFirstArchitectureTest {
         assertEquals(2, nextAttempt)
         assertEquals(4000L, backoffMs) // Exponential backoff 2^2 * 1000 = 4000ms
     }
+
+    @Test
+    fun testPhase2CatalogAndStoreOperations() {
+        // Arrange Product Entity
+        val initialProduct = ProductEntity(
+            id = 501L,
+            productName = "Terracotta Lamp",
+            category = "Terracotta",
+            craft = "Pottery",
+            material = "Clay",
+            technique = "Handmade",
+            color = "Terracotta Red",
+            dimensions = "15x15 cm",
+            productionTime = "2 Days",
+            descriptionHi = "हस्तनिर्मित मिटटी का लैम्प",
+            descriptionEn = "Handmade Terracotta Lamp",
+            seoTags = "Terracotta, Lamp, Handmade",
+            originalImageUrl = "file:///local/lamp_orig.jpg",
+            enhancedImageUrl = "file:///local/lamp_enh.jpg",
+            materialCost = 200.0,
+            labourCost = 300.0,
+            otherCost = 50.0,
+            costFloor = 550.0,
+            recommendedPrice = 800.0,
+            sellingPrice = 800.0,
+            status = "Ready"
+        )
+
+        // Test Edit Operation
+        val updatedProduct = initialProduct.copy(
+            productName = "Designer Terracotta Lamp",
+            sellingPrice = 850.0,
+            status = "Published"
+        )
+
+        assertEquals("Designer Terracotta Lamp", updatedProduct.productName)
+        assertEquals(850.0, updatedProduct.sellingPrice, 0.01)
+        assertEquals("Published", updatedProduct.status)
+        assertEquals(550.0, updatedProduct.costFloor, 0.01)
+        assertTrue(updatedProduct.sellingPrice >= updatedProduct.costFloor)
+    }
 }

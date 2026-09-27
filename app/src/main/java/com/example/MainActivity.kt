@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
                         AppScreen.BUYER_ORDERS -> BuyerOrdersScreen(viewModel)
                         AppScreen.PUBLIC_PRODUCT_DETAIL -> PublicProductDetailScreen(viewModel)
                         AppScreen.SELLER_LOGIN -> SellerAuthScreen(viewModel)
-                        AppScreen.SELLER_PROFILE -> ProfileSetupScreen(viewModel)
+                        AppScreen.SELLER_PROFILE -> SellerProfileScreen(viewModel)
                         AppScreen.SELLER_HOME -> HomeScreen(viewModel) // Artisan Dashboard
                         AppScreen.IMAGE_STUDIO, AppScreen.CREATE_PRODUCT -> ImageStudioScreen(viewModel)
                         AppScreen.VOICE_CATALOGER -> VoiceCatalogerScreen(viewModel)
@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
                         AppScreen.FINAL_PREVIEW -> FinalPreviewScreen(viewModel)
                         AppScreen.CATALOG -> CatalogScreen(viewModel)
                         AppScreen.PRODUCT_DETAIL -> ProductDetailScreen(viewModel)
+                        AppScreen.PRODUCT_EDIT -> ProductEditScreen(viewModel)
                         else -> MarketplaceHomeScreen(viewModel)
                     }
                 }
