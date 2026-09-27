@@ -312,5 +312,61 @@ class OfflineFirstArchitectureTest {
         assertEquals(1400.0, confirmedConv.agreedUnitPrice, 0.01)
         assertEquals(70000.0, confirmedConv.agreedQuantity * confirmedConv.agreedUnitPrice, 0.01)
     }
+
+    // ============================================================
+    // SUPABASE INTEGRATION TESTS
+    // ============================================================
+
+    @Test
+    fun testSupabaseDtoMapping_mapsProductEntityToSupabaseDto() {
+        val product = ProductEntity(
+            id = 201L,
+            productName = "Terracotta Diya Set",
+            category = "Terracotta",
+            craft = "Pottery",
+            material = "Clay",
+            technique = "Handmade",
+            color = "Red",
+            sellingPrice = 450.0
+        )
+
+        val dto = com.example.network.SupabaseProductDto(
+            localId = product.id,
+            productName = product.productName,
+            category = product.category,
+            craft = product.craft,
+            material = product.material,
+            technique = product.technique,
+            color = product.color,
+            sellingPrice = product.sellingPrice
+        )
+
+        assertEquals(201L, dto.localId)
+        assertEquals("Terracotta Diya Set", dto.productName)
+        assertEquals(450.0, dto.sellingPrice, 0.01)
+    }
+
+    @Test
+    fun testSupabaseOutboxMapping_mapsMessagePayloadToSupabaseDto() {
+        val clientMsgId = "MSG-CLIENT-${UUID.randomUUID()}"
+        val messageId = "MSG-${UUID.randomUUID()}"
+
+        val messageDto = com.example.network.SupabaseMessageDto(
+            messageId = messageId,
+            conversationId = "CONV-101-BUYER-101",
+            clientMessageId = clientMsgId,
+            senderId = "BUYER-101",
+            senderType = "BUYER",
+            text = "Rate ₹1400 me 50 pcs de sakte hain?",
+            extractedQuantity = 50,
+            extractedPrice = 1400.0
+        )
+
+        assertEquals(clientMsgId, messageDto.clientMessageId)
+        assertEquals("CONV-101-BUYER-101", messageDto.conversationId)
+        assertEquals(50, messageDto.extractedQuantity)
+        assertEquals(1400.0, messageDto.extractedPrice!!, 0.01)
+    }
 }
+
 
